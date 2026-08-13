@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fruit Dojo — Tranche & Score</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Sora:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="game-wrap">
+
+    <!-- HUD -->
+    <div id="hud">
+      <div class="hud-block">
+        <span class="hud-label">Score</span>
+        <span class="hud-value" id="score">0</span>
+      </div>
+      <div class="hud-block">
+        <span class="hud-label">Combo</span>
+        <span class="hud-value" id="combo">x0</span>
+      </div>
+      <div id="lives" class="hud-block">
+        <span class="hud-label">Vies</span>
+        <div id="lives-icons">
+          <span class="life"></span>
+          <span class="life"></span>
+          <span class="life"></span>
+        </div>
+      </div>
+    </div>
+
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Start screen -->
+    <div id="start-screen" class="overlay">
+      <p class="eyebrow">Dojo des fruits</p>
+      <h1>FRUIT<span>DOJO</span></h1>
+      <p class="tagline">Tranchez les fruits. Évitez les bombes. Ne loupez rien.</p>
+      <button id="start-btn" class="lame-btn">Commencer</button>
+      <p class="hint">Glissez la souris ou le doigt à travers les fruits pour les trancher</p>
+    </div>
+
+    <!-- Game over screen -->
+    <div id="gameover-screen" class="overlay hidden">
+      <p class="eyebrow">Lame brisée</p>
+      <h1>PERDU</h1>
+      <p class="tagline">Score final</p>
+      <p id="final-score">0</p>
+      <p id="best-score-line" class="hint"></p>
+      <button id="retry-btn" class="lame-btn">Rejouer</button>
+    </div>
+
+  </div>
+
+<script src="script.js"></script>
+</body>
+</html>
