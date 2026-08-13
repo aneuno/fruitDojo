@@ -9,9 +9,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
   <div id="game-wrap">
-
     <!-- HUD -->
     <div id="hud">
       <div class="hud-block">
@@ -31,18 +29,33 @@
         </div>
       </div>
     </div>
-
     <canvas id="game-canvas"></canvas>
-
     <!-- Start screen -->
     <div id="start-screen" class="overlay">
       <p class="eyebrow">Dojo des fruits</p>
       <h1>FRUIT<span>DOJO</span></h1>
       <p class="tagline">Tranchez les fruits. Évitez les bombes. Ne loupez rien.</p>
-      <button id="start-btn" class="lame-btn">Commencer</button>
-      <p class="hint">Glissez la souris ou le doigt à travers les fruits pour les trancher</p>
-    </div>
 
+      <div id="mode-select" class="mode-select" role="group" aria-label="Mode de jeu">
+        <button class="mode-btn active" data-mode="slice" type="button">
+          <span class="mode-icon">✦</span>
+          <span class="mode-text">
+            <span class="mode-title">Mode Tranche</span>
+            <span class="mode-sub">Glissez à travers les fruits</span>
+          </span>
+        </button>
+        <button class="mode-btn" data-mode="tap" type="button">
+          <span class="mode-icon">✺</span>
+          <span class="mode-text">
+            <span class="mode-title">Mode Tape</span>
+            <span class="mode-sub">Cliquez pour les faire exploser</span>
+          </span>
+        </button>
+      </div>
+
+      <button id="start-btn" class="lame-btn">Commencer</button>
+      <p class="hint" id="start-hint">Glissez la souris ou le doigt à travers les fruits pour les trancher</p>
+    </div>
     <!-- Game over screen -->
     <div id="gameover-screen" class="overlay hidden">
       <p class="eyebrow">Lame brisée</p>
@@ -52,9 +65,7 @@
       <p id="best-score-line" class="hint"></p>
       <button id="retry-btn" class="lame-btn">Rejouer</button>
     </div>
-
   </div>
-
 <script src="script.js"></script>
 </body>
 </html>
