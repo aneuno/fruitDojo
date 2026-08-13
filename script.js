@@ -14,6 +14,8 @@ const startBtn = document.getElementById("start-btn");
 const retryBtn = document.getElementById("retry-btn");
 const finalScoreEl = document.getElementById("final-score");
 const bestScoreLine = document.getElementById("best-score-line");
+const modeButtons = document.querySelectorAll(".mode-btn");
+const startHint = document.getElementById("start-hint");
 
 let W, H, DPR;
 function resize() {
@@ -36,6 +38,31 @@ const FRUIT_TYPES = [
 ];
 
 const GRAVITY = 1500; // px/s^2
+
+// Marge de sécurité en haut de l'écran : aucun fruit/bombe ne doit
+// dépasser cette limite (permet aussi de rester sous le HUD).
+const TOP_MARGIN = 90;
+
+// Rayon de collision additionnel : agrandit la zone "cliquable/trancable"
+// sans changer la taille visuelle du fruit.
+const HIT_PADDING = 14;
+
+/* ---------- Mode de jeu ---------- */
+// 'slice' : il faut glisser à travers les fruits pour les trancher.
+// 'tap'   : il faut cliquer/taper directement sur les fruits pour les faire exploser.
+let gameMode = "slice";
+
+modeButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    modeButtons.forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    gameMode = btn.dataset.mode;
+    startHint.textContent =
+      gameMode === "slice"
+        ? "Glissez la souris ou le doigt à travers les fruits pour les trancher"
+        : "Cliquez ou tapez directement sur les fruits pour les faire exploser";
+  });
+});
 
 /* ---------- Etat du jeu ---------- */
 let fruits = [];
@@ -68,6 +95,10 @@ function pointerDown(evt) {
   pointerActive = true;
   pointerPos = getPointerPos(evt);
   trail.push({ x: pointerPos.x, y: pointerPos.y, t: performance.now() });
+
+  if (gameMode === "tap") {
+    checkTapHit(pointerPos);
+  }
 }
 function pointerMove(evt) {
   if (!running) return;
@@ -76,7 +107,7 @@ function pointerMove(evt) {
   pointerPos = getPointerPos(evt);
   trail.push({ x: pointerPos.x, y: pointerPos.y, t: performance.now() });
   if (trail.length > 14) trail.shift();
-  if (pointerActive) {
+  if (pointerActive && gameMode === "slice") {
     checkSliceAlongSegment(prev, pointerPos);
   }
 }
@@ -92,18 +123,27 @@ canvas.addEventListener("touchstart", (e) => { pointerDown(e); }, { passive: tru
 canvas.addEventListener("touchmove", pointerMove, { passive: false });
 window.addEventListener("touchend", pointerUp);
 
+/* ---------- Utilitaire de trajectoire ---------- */
+// Calcule une vitesse verticale initiale telle que le sommet de la
+// trajectoire ne dépasse jamais TOP_MARGIN, quel que soit le facteur aléatoire.
+function launchVelocity() {
+  const maxApex = Math.max(120, H - TOP_MARGIN);
+  const heightFactor = 0.45 + Math.random() * 0.5; // 0.45 -> 0.95
+  const apexHeight = maxApex * heightFactor;
+  return -Math.sqrt(2 * GRAVITY * apexHeight);
+}
+
 /* ---------- Fruit ---------- */
 class Fruit {
   constructor() {
     const type = FRUIT_TYPES[Math.floor(Math.random() * FRUIT_TYPES.length)];
     Object.assign(this, type);
+    this.hitRadius = this.radius + HIT_PADDING;
     this.isBomb = false;
     this.x = 60 + Math.random() * (W - 120);
     this.y = H + this.radius + 10;
-    const targetHeightFactor = 0.35 + Math.random() * 0.35;
-    const vy = -Math.sqrt(2 * GRAVITY * H * (0.55 + targetHeightFactor));
     this.vx = (Math.random() - 0.5) * 220;
-    this.vy = vy;
+    this.vy = launchVelocity();
     this.rotation = Math.random() * Math.PI * 2;
     this.rotSpeed = (Math.random() - 0.5) * 3;
     this.sliced = false;
@@ -114,6 +154,12 @@ class Fruit {
     this.x += this.vx * dt;
     this.y += this.vy * dt;
     this.rotation += this.rotSpeed * dt;
+    // Filet de sécurité : si un fruit s'approche trop du haut (ex. après un
+    // redimensionnement de fenêtre en plein vol), on le refait redescendre.
+    if (this.y - this.radius < TOP_MARGIN && this.vy < 0) {
+      this.y = TOP_MARGIN + this.radius;
+      this.vy = Math.abs(this.vy) * 0.4;
+    }
     if (this.y - this.radius > H + 40) this.dead = true;
   }
   draw() {
@@ -143,10 +189,10 @@ class Bomb {
   constructor() {
     this.isBomb = true;
     this.radius = 34;
+    this.hitRadius = this.radius + HIT_PADDING;
     this.x = 60 + Math.random() * (W - 120);
     this.y = H + this.radius + 10;
-    const targetHeightFactor = 0.35 + Math.random() * 0.35;
-    this.vy = -Math.sqrt(2 * GRAVITY * H * (0.55 + targetHeightFactor));
+    this.vy = launchVelocity();
     this.vx = (Math.random() - 0.5) * 200;
     this.rotation = Math.random() * Math.PI * 2;
     this.rotSpeed = (Math.random() - 0.5) * 2;
@@ -160,6 +206,10 @@ class Bomb {
     this.y += this.vy * dt;
     this.rotation += this.rotSpeed * dt;
     this.fuseFlicker += dt * 12;
+    if (this.y - this.radius < TOP_MARGIN && this.vy < 0) {
+      this.y = TOP_MARGIN + this.radius;
+      this.vy = Math.abs(this.vy) * 0.4;
+    }
     if (this.y - this.radius > H + 40) this.dead = true;
   }
   draw() {
@@ -238,12 +288,18 @@ class Half {
 }
 
 class Splash {
-  constructor(x, y, color) {
+  constructor(x, y, color, angleOverride, speedBoost) {
     this.x = x;
     this.y = y;
     this.color = color;
-    this.vx = (Math.random() - 0.5) * 260;
-    this.vy = (Math.random() - 1.2) * 260;
+    if (angleOverride !== undefined) {
+      const speed = (140 + Math.random() * 180) * (speedBoost || 1);
+      this.vx = Math.cos(angleOverride) * speed;
+      this.vy = Math.sin(angleOverride) * speed;
+    } else {
+      this.vx = (Math.random() - 0.5) * 260;
+      this.vy = (Math.random() - 1.2) * 260;
+    }
     this.radius = 2 + Math.random() * 4;
     this.life = 0.6 + Math.random() * 0.4;
     this.maxLife = this.life;
@@ -291,7 +347,34 @@ class BombFlash {
   }
 }
 
-/* ---------- Collision segment-cercle ---------- */
+/* ---------- Petit flash doré pour le mode Tape ---------- */
+class PopFlash {
+  constructor(x, y, color) {
+    this.x = x;
+    this.y = y;
+    this.color = color;
+    this.life = 0.3;
+    this.maxLife = 0.3;
+  }
+  update(dt) { this.life -= dt; }
+  draw() {
+    if (this.life <= 0) return;
+    const t = this.life / this.maxLife;
+    ctx.save();
+    ctx.globalAlpha = t * 0.8;
+    const grad = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, 70 * (1 - t) + 10);
+    grad.addColorStop(0, "rgba(255,255,255,0.85)");
+    grad.addColorStop(0.5, this.color);
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 70 * (1 - t) + 10, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+/* ---------- Collision segment-cercle / point-cercle ---------- */
 function segCircleHit(p1, p2, cx, cy, r) {
   const dx = p2.x - p1.x;
   const dy = p2.y - p1.y;
@@ -304,11 +387,30 @@ function segCircleHit(p1, p2, cx, cy, r) {
   return distSq <= r * r;
 }
 
+function pointCircleHit(p, cx, cy, r) {
+  const dx = p.x - cx;
+  const dy = p.y - cy;
+  return dx * dx + dy * dy <= r * r;
+}
+
 function checkSliceAlongSegment(p1, p2) {
   for (const f of fruits) {
     if (f.sliced || f.dead) continue;
-    if (segCircleHit(p1, p2, f.x, f.y, f.radius)) {
+    if (segCircleHit(p1, p2, f.x, f.y, f.hitRadius)) {
       sliceEntity(f, p2);
+    }
+  }
+}
+
+// Mode Tape : on ne coupe/explose que le fruit directement touché
+// (le plus récemment apparu en premier, pour privilégier ce qui est visuellement au-dessus).
+function checkTapHit(point) {
+  for (let i = fruits.length - 1; i >= 0; i--) {
+    const f = fruits[i];
+    if (f.sliced || f.dead) continue;
+    if (pointCircleHit(point, f.x, f.y, f.hitRadius)) {
+      explodeEntity(f, point);
+      break;
     }
   }
 }
@@ -327,6 +429,26 @@ function sliceEntity(entity, atPoint) {
   particles.push(new Half(entity, 1));
   for (let i = 0; i < 10; i++) {
     particles.push(new Splash(entity.x, entity.y, entity.fleshColor));
+  }
+  spawnScorePop(entity.x, entity.y, `+${entity.points}${combo > 1 ? " x" + combo : ""}`);
+}
+
+// Mode Tape : le fruit explose en éclats radiaux plutôt qu'en deux moitiés.
+function explodeEntity(entity, atPoint) {
+  entity.sliced = true;
+  if (entity.isBomb) {
+    triggerBombHit(entity);
+    return;
+  }
+  score += entity.points;
+  combo += 1;
+  comboTimer = 0.9;
+  updateHUD();
+  particles.push(new PopFlash(entity.x, entity.y, entity.color));
+  const burstCount = 16;
+  for (let i = 0; i < burstCount; i++) {
+    const angle = (Math.PI * 2 * i) / burstCount + Math.random() * 0.3;
+    particles.push(new Splash(entity.x, entity.y, i % 2 === 0 ? entity.color : entity.fleshColor, angle, 1.1));
   }
   spawnScorePop(entity.x, entity.y, `+${entity.points}${combo > 1 ? " x" + combo : ""}`);
 }
@@ -415,7 +537,7 @@ function update(dt) {
 }
 
 function drawTrail() {
-  if (trail.length < 2) return;
+  if (gameMode !== "slice" || trail.length < 2) return;
   ctx.save();
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
